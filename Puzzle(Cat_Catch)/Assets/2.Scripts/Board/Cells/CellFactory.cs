@@ -9,22 +9,19 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Ninez.Board
+public static class CellFactory
 {
-    public static class CellFactory
+    /// <summary>스테이지 정보에서 (nRow, nCol)의 셀 타입을 읽어 해당 타입의 Cell 생성</summary>
+    public static Cell SpawnCell(StageInfo stageInfo, int nRow, int nCol)
     {
-        /// <summary>스테이지 정보에서 (nRow, nCol)의 셀 타입을 읽어 해당 타입의 Cell 생성</summary>
-        public static Cell SpawnCell(StageInfo stageInfo, int nRow, int nCol)
-        {
-            Debug.Assert(stageInfo != null);
-            Debug.Assert(nRow < stageInfo.row && nCol < stageInfo.col);
-            return SpawnCell(stageInfo.GetCellType(nRow, nCol));
-        }
+        Debug.Assert(stageInfo != null);
+        Debug.Assert(nRow < stageInfo.row && nCol < stageInfo.col);
+        return SpawnCell(stageInfo.GetCellType(nRow, nCol));
+    }
 
-        /// <summary>지정 CellType의 Cell 인스턴스 생성</summary>
-        public static Cell SpawnCell(CellType cellType)
-        {
-            return new Cell(cellType);
-        }
+    /// <summary>지정 CellType의 Cell 인스턴스 생성</summary>
+    public static Cell SpawnCell(CellType cellType)
+    {
+        return new Cell(cellType);
     }
 }

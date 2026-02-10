@@ -7,8 +7,6 @@
 
 using System;
 using UnityEngine;
-using Ninez.Board;
-
 public class StageBuilder
 {
     StageInfo m_StageInfo;

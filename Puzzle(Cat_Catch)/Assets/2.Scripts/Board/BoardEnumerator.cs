@@ -8,23 +8,19 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using Ninez.Board;
 
-namespace Ninez.Board
+public class BoardEnumerator
 {
-    public class BoardEnumerator
+    Board m_Board;
+
+    public BoardEnumerator(Board board)
     {
-        Ninez.Board.Board m_Board;
+        this.m_Board = board;
+    }
 
-        public BoardEnumerator(Ninez.Board.Board board)
-        {
-            this.m_Board = board;
-        }
-
-        /// <summary>해당 칸이 케이지(가두기) 타입 셀인지. true면 블록이 단순 제거 규칙 적용(퀘스트 확장용)</summary>
-        public bool IsCageTypeCell(int nRow, int nCol)
-        {
-            return false;
-        }
+    /// <summary>해당 칸이 케이지(가두기) 타입 셀인지. true면 블록이 단순 제거 규칙 적용(퀘스트 확장용)</summary>
+    public bool IsCageTypeCell(int nRow, int nCol)
+    {
+        return false;
     }
 }

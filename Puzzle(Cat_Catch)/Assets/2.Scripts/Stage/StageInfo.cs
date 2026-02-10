@@ -8,8 +8,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using Ninez.Board;
-
 [System.Serializable]
 public class StageInfo
 {
@@ -40,7 +38,6 @@ public class StageInfo
     public bool DoValidation()
     {
         Debug.Assert(cells.Length == row * col);
-        Debug.Log($"cell length : {cells.Length}, row, col = ({row}, {col})");
 
         if (cells.Length != row * col)
             return false;

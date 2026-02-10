@@ -8,26 +8,23 @@
 using UnityEngine;
 using System.Collections;
 
-namespace Ninez.Effect
+[RequireComponent(typeof(ParticleSystem))]
+public class ParticleAutoDestroy : MonoBehaviour
 {
-    [RequireComponent(typeof(ParticleSystem))]
-    public class ParticleAutoDestroy : MonoBehaviour
+    void OnEnable()
     {
-        void OnEnable()
-        {
-            StartCoroutine(CoCheckAlive());
-        }
+        StartCoroutine(CoCheckAlive());
+    }
 
-        IEnumerator CoCheckAlive()
+    IEnumerator CoCheckAlive()
+    {
+        while (true)
         {
-            while (true)
+            yield return new WaitForSeconds(0.5f);
+            if (!GetComponent<ParticleSystem>().IsAlive(true))
             {
-                yield return new WaitForSeconds(0.5f);
-                if (!GetComponent<ParticleSystem>().IsAlive(true))
-                {
-                    Destroy(this.gameObject);
-                    break;
-                }
+                Destroy(this.gameObject);
+                break;
             }
         }
     }

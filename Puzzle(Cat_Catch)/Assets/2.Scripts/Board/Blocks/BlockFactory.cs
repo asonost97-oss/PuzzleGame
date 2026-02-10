@@ -9,24 +9,20 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Ninez.Board
+public static class BlockFactory
 {
-    public static class BlockFactory
+    /// <summary>
+    /// 지정 타입의 Block 생성. BASIC이면 breed 0~5 중 랜덤, EMPTY면 NA.
+    /// </summary>
+    public static Block SpawnBlock(BlockType blockType)
     {
-        /// <summary>
-        /// 지정 타입의 Block 생성. BASIC이면 breed 0~5 중 랜덤, EMPTY면 NA.
-        /// 이유: 새 블록이 항상 같은 종류만 나오지 않도록 랜덤으로 다양하게 만듦.
-        /// </summary>
-        public static Block SpawnBlock(BlockType blockType)
-        {
-            Block block = new Block(blockType);
+        Block block = new Block(blockType);
 
-            if (blockType == BlockType.BASIC)
-                block.breed = (BlockBreed)UnityEngine.Random.Range(0, 6);
-            else if (blockType == BlockType.EMPTY)
-                block.breed = BlockBreed.NA;
+        if (blockType == BlockType.BASIC)
+            block.breed = (BlockBreed)UnityEngine.Random.Range(0, 6);
+        else if (blockType == BlockType.EMPTY)
+            block.breed = BlockBreed.NA;
 
-            return block;
-        }
+        return block;
     }
 }

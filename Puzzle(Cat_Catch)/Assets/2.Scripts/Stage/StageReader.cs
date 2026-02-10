@@ -12,8 +12,6 @@ public static class StageReader
     /// <summary>Resources/Stage/stage_XXXX 에셋 로드 후 JsonUtility로 StageInfo 반환. 없으면 null</summary>
     public static StageInfo LoadStage(int nStage)
     {
-        Debug.Log($"Load Stage : Stage/{GetFileName(nStage)}");
-
         TextAsset textAsset = Resources.Load<TextAsset>($"Stage/{GetFileName(nStage)}");
         if (textAsset != null)
         {

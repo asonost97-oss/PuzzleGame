@@ -7,12 +7,9 @@
 
 using UnityEngine;
 
-namespace Ninez.Core
+public static class Constants
 {
-    public static class Constants
-    {
-        public static float BLOCK_ORG = 0.5f;           // 블록/셀 위치 계산 시 셀 중심 정렬용 오프셋
-        public static float SWIPE_DURATION = 0.2f;     // 스와이프 시 두 블록이 자리 바꿀 때 걸리는 시간
-        public static float BLOCK_DESTROY_SCALE = 0.3f; // 블록 제거 연출 시 최종 축소 비율 (1 → 0.3)
-    }
+    public static float BLOCK_ORG = 0.5f;           // 블록/셀 위치 계산 시 셀 중심 정렬용 오프셋
+    public static float SWIPE_DURATION = 0.2f;     // 스와이프 시 두 블록이 자리 바꿀 때 걸리는 시간
+    public static float BLOCK_DESTROY_SCALE = 0.3f; // 블록 제거 연출 시 최종 축소 비율 (1 → 0.3)
 }

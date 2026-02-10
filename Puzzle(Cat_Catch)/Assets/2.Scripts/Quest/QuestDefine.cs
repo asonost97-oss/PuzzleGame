@@ -7,35 +7,32 @@
 
 using System;
 
-namespace Ninez.Quest
+public enum MatchType
 {
-    public enum MatchType
+    NONE = 0,
+    THREE = 3,       // 3매치 → CLEAR_SIMPLE
+    FOUR = 4,        // 4매치 → CLEAR_HORZ 또는 VERT
+    FIVE = 5,        // 5매치 → CLEAR_LAZER
+    THREE_THREE = 6,  // 3+3 (T/L) → CLEAR_CIRCLE
+    THREE_FOUR = 7,
+    THREE_FIVE = 8,
+    FOUR_FIVE = 9,
+    FOUR_FOUR = 10,
+}
+
+static class MatchTypeMethod
+{
+    public static short ToValue(this MatchType matchType)
     {
-        NONE = 0,
-        THREE = 3,       // 3매치 → CLEAR_SIMPLE
-        FOUR = 4,        // 4매치 → CLEAR_HORZ 또는 VERT
-        FIVE = 5,        // 5매치 → CLEAR_LAZER
-        THREE_THREE = 6,  // 3+3 (T/L) → CLEAR_CIRCLE
-        THREE_FOUR = 7,
-        THREE_FIVE = 8,
-        FOUR_FIVE = 9,
-        FOUR_FOUR = 10,
+        return (short)matchType;
     }
 
-    static class MatchTypeMethod
+    /// <summary>가로 매치 + 세로 매치 등 두 매치를 합침. FOUR+FOUR → FOUR_FOUR 등</summary>
+    public static MatchType Add(this MatchType matchTypeSrc, MatchType matchTypeTarget)
     {
-        public static short ToValue(this MatchType matchType)
-        {
-            return (short)matchType;
-        }
+        if (matchTypeSrc == MatchType.FOUR && matchTypeTarget == MatchType.FOUR)
+            return MatchType.FOUR_FOUR;
 
-        /// <summary>가로 매치 + 세로 매치 등 두 매치를 합침. FOUR+FOUR → FOUR_FOUR 등</summary>
-        public static MatchType Add(this MatchType matchTypeSrc, MatchType matchTypeTarget)
-        {
-            if (matchTypeSrc == MatchType.FOUR && matchTypeTarget == MatchType.FOUR)
-                return MatchType.FOUR_FOUR;
-
-            return (MatchType)((int)matchTypeSrc + (int)matchTypeTarget);
-        }
+        return (MatchType)((int)matchTypeSrc + (int)matchTypeTarget);
     }
 }

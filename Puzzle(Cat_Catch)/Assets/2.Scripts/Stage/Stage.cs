@@ -8,8 +8,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using Ninez.Board;
-using Ninez.Core;
 using System;
 
 public class Stage
@@ -17,8 +15,8 @@ public class Stage
     public int maxRow { get { return m_Board.maxRow; } }
     public int maxCol { get { return m_Board.maxCol; } }
 
-    Ninez.Board.Board m_Board;
-    public Ninez.Board.Board board { get { return m_Board; } }
+    Board m_Board;
+    public Board board { get { return m_Board; } }
 
     StageBuilder m_StageBuilder;
 
@@ -29,7 +27,7 @@ public class Stage
     public Stage(StageBuilder stageBuilder, int nRow, int nCol)
     {
         m_StageBuilder = stageBuilder;
-        m_Board = new Ninez.Board.Board(nRow, nCol);
+        m_Board = new Board(nRow, nCol);
     }
 
     /// <summary>Cell/Block 프리팹과 컨테이너로 보드를 시각적으로 구성(셔플 후 GameObject 생성·배치)</summary>

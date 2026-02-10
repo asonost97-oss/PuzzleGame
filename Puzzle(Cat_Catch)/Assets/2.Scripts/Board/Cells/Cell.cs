@@ -9,53 +9,50 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Ninez.Board
+public class Cell
 {
-    public class Cell
+    protected CellType m_CellType;
+    public CellType type
     {
-        protected CellType m_CellType;
-        public CellType type
-        {
-            get { return m_CellType; }
-            set { m_CellType = value; }
-        }
+        get { return m_CellType; }
+        set { m_CellType = value; }
+    }
 
-        protected CellBehaviour m_CellBehaviour;
-        public CellBehaviour cellBehaviour
+    protected CellBehaviour m_CellBehaviour;
+    public CellBehaviour cellBehaviour
+    {
+        get { return m_CellBehaviour; }
+        set
         {
-            get { return m_CellBehaviour; }
-            set
-            {
-                m_CellBehaviour = value;
-                m_CellBehaviour.SetCell(this);
-            }
+            m_CellBehaviour = value;
+            m_CellBehaviour.SetCell(this);
         }
+    }
 
-        public Cell(CellType cellType)
-        {
-            m_CellType = cellType;
-        }
+    public Cell(CellType cellType)
+    {
+        m_CellType = cellType;
+    }
 
-        /// <summary>Cell Prefab으로 GameObject를 생성해 컨테이너 자식으로 넣고, CellBehaviour 참조를 저장합니다.</summary>
-        public Cell InstantiateCellObj(GameObject cellPrefab, Transform containerObj)
-        {
-            GameObject newObj = Object.Instantiate(cellPrefab, new Vector3(0, 0, 0), Quaternion.identity);
-            newObj.transform.parent = containerObj;
-            this.cellBehaviour = newObj.transform.GetComponent<CellBehaviour>();
-            return this;
-        }
+    /// <summary>Cell Prefab으로 GameObject를 생성해 컨테이너 자식으로 넣고, CellBehaviour 참조를 저장합니다.</summary>
+    public Cell InstantiateCellObj(GameObject cellPrefab, Transform containerObj)
+    {
+        GameObject newObj = Object.Instantiate(cellPrefab, new Vector3(0, 0, 0), Quaternion.identity);
+        newObj.transform.parent = containerObj;
+        this.cellBehaviour = newObj.transform.GetComponent<CellBehaviour>();
+        return this;
+    }
 
-        /// <summary>연결된 셀 GameObject를 지정 좌표로 이동 (보드 배치 시 사용)</summary>
-        public void Move(float x, float y)
-        {
-            cellBehaviour.transform.position = new Vector3(x, y);
-        }
+    /// <summary>연결된 셀 GameObject를 지정 좌표로 이동 (보드 배치 시 사용)</summary>
+    public void Move(float x, float y)
+    {
+        cellBehaviour.transform.position = new Vector3(x, y);
+    }
 
-        /// <summary>장애물(빈칸 등)이면 true. 블록이 이 칸을 "막힌 칸"으로 간주할 때 사용</summary>
-        public bool IsObstracle()
-        {
-            return type == CellType.EMPTY;
-        }
+    /// <summary>장애물(빈칸 등)이면 true. 블록이 이 칸을 "막힌 칸"으로 간주할 때 사용</summary>
+    public bool IsObstracle()
+    {
+        return type == CellType.EMPTY;
     }
 }
 
