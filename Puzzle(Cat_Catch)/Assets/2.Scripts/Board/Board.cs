@@ -1,11 +1,15 @@
-﻿using System;
+// ============================================================================
+// Board.cs - 퍼즐 보드의 핵심 로직 (셀/블록 배열, 매칭, 셔플, 드롭, 스폰)
+// ============================================================================
+// 설명: row x col 크기의 Cell/Block 2차원 배열을 관리하고, 3매치 판정·제거·재배치·새 블록 생성까지 담당합니다.
+// 이유: Stage는 "한 판"의 진입점이고, 실제 격자·규칙은 Board에 모아 단위 테스트와 재사용을 쉽게 합니다.
+// ============================================================================
+
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Ninez.Quest;
-using Ninez.Util;
-using Ninez.Stage;
-
 namespace Ninez.Board
 {
     using IntIntKV = KeyValuePair<int, int>;
@@ -18,124 +22,102 @@ namespace Ninez.Board
         public int maxRow { get { return m_nRow; } }
         public int maxCol { get { return m_nCol; } }
 
+        /// <summary>각 칸의 셀 타입(빈칸/기본/장애물 등). 블록 배치 가능 여부 판단에 사용</summary>
         Cell[,] m_Cells;
         public Cell[,] cells { get { return m_Cells; } }
 
+        /// <summary>각 칸의 블록. null이면 빈 칸(제거됐거나 EMPTY 셀)</summary>
         Block[,] m_Blocks;
         public Block[,] blocks { get { return m_Blocks; } }
 
-        Transform m_Container;
+        Transform m_Container;       // Cell/Block의 부모 Transform
         GameObject m_CellPrefab;
         GameObject m_BlockPrefab;
-        StageBuilder m_StageBuilder;
+        StageBuilder m_StageBuilder;  // 새 블록 생성 시 SpawnBlock 호출용
 
+        /// <summary>보드 순회·특수 셀 판정 등. Block.DoEvaluation에서 케이지 등 확인 시 사용</summary>
         BoardEnumerator m_Enumerator;
 
+        /// <summary>row x col 크기의 빈 보드 생성. Cell/Block은 StageBuilder가 채움</summary>
         public Board(int nRow, int nCol)
         {
             m_nRow = nRow;
             m_nCol = nCol;
-
             m_Cells = new Cell[nRow, nCol];
             m_Blocks = new Block[nRow, nCol];
-
             m_Enumerator = new BoardEnumerator(this);
         }
 
+        /// <summary>
+        /// 스테이지 구성을 완료: 프리팹/컨테이너 저장 → 셔플(3매치 없음) → Cell/Block GameObject 생성 및 배치.
+        /// 이유: 게임 시작 시 한 번 호출되어 플레이 가능한 초기 보드를 만듦.
+        /// </summary>
         internal void ComposeStage(GameObject cellPrefab, GameObject blockPrefab, Transform container, StageBuilder stageBuilder)
         {
-            //1. 스테이지 구성에 필요한 Cell,Block, Container(Board) 정보를 저장한다. 
             m_CellPrefab = cellPrefab;
             m_BlockPrefab = blockPrefab;
             m_Container = container;
             m_StageBuilder = stageBuilder;
 
-            //2. 3매치된 블럭이 없도록 섞는다.  
             BoardShuffler shuffler = new BoardShuffler(this, true);
             shuffler.Shuffle();
 
-            //3. Cell, Block Prefab을 이용해서 Board에 Cell/Block GameObject를 추가한다. 
             float initX = CalcInitX(0.5f);
             float initY = CalcInitY(0.5f);
             for (int nRow = 0; nRow < m_nRow; nRow++)
                 for (int nCol = 0; nCol < m_nCol; nCol++)
                 {
-                    //3.1 Cell GameObject 생성을 요청한다.GameObject가 생성되지 않는 경우에 null을 리턴한다.
                     Cell cell = m_Cells[nRow, nCol]?.InstantiateCellObj(cellPrefab, container);
                     cell?.Move(initX + nCol, initY + nRow);
 
-                    //3.2 Block GameObject 생성을 요청한다.
-                    //    GameObject가 생성되지 않는 경우에 null을 리턴한다. EMPTY 인 경우에 null
                     Block block = m_Blocks[nRow, nCol]?.InstantiateBlockObj(blockPrefab, container);
                     block?.Move(initX + nCol, initY + nRow);
                 }
         }
 
-        /**
-         * 호출 결과 : 3 매칭된 블럭이 제거된다.
-         */
+        /// <summary>
+        /// 현재 보드에서 3매치를 찾아 제거합니다. 매치 없으면 matchResult=false로 종료.
+        /// 이유: 스와이프 후 한 번만 평가하고, 연쇄 매치는 ActionManager가 반복 호출합니다.
+        /// </summary>
         public IEnumerator Evaluate(Returnable<bool> matchResult)
         {
-            //1. 모든 블럭의 매칭 정보(개수, 상태, 내구도)를 계산한 후, 3매치 블럭이 있으면 true 리턴 
             bool bMatchedBlockFound = UpdateAllBlocksMatchedStatus();
 
-            //2. 3매칭 블럭 없는 경우 
-            if(bMatchedBlockFound == false)
+            if (bMatchedBlockFound == false)
             {
                 matchResult.value = false;
                 yield break;
             }
 
-            //3. 3매칭 블럭 있는 경우
-
-            //3.1. 첫번째 phase
-            //   매치된 블럭에 지정된 액션을 수행한.
-            //   ex) 가로줄의 블럭 전체가 클리어 되는 블럭인 경우에 처리 등
             for (int nRow = 0; nRow < m_nRow; nRow++)
                 for (int nCol = 0; nCol < m_nCol; nCol++)
-                {
-                    Block block = m_Blocks[nRow, nCol];
+                    m_Blocks[nRow, nCol]?.DoEvaluation(m_Enumerator, nRow, nCol);
 
-                    block?.DoEvaluation(m_Enumerator, nRow, nCol);
-                }
-                
-            //3.2. 두번째 phase
-            //   첫번째 Phase에서 반영된 블럭의 상태값에 따라서 블럭의 최종 상태를 반영한.
             List<Block> clearBlocks = new List<Block>();
-
             for (int nRow = 0; nRow < m_nRow; nRow++)
             {
                 for (int nCol = 0; nCol < m_nCol; nCol++)
                 {
                     Block block = m_Blocks[nRow, nCol];
-
-                    if (block != null)
+                    if (block != null && block.status == BlockStatus.CLEAR)
                     {
-                        if (block.status == BlockStatus.CLEAR)
-                        {
-                            clearBlocks.Add(block);
-
-                            m_Blocks[nRow, nCol] = null;    //보드에서 블럭 제거 (블럭 객체 제거 X)
-                        }
+                        clearBlocks.Add(block);
+                        m_Blocks[nRow, nCol] = null;
                     }
                 }
             }
 
-            //3.3 매칭된 블럭을 제거한다. 
             clearBlocks.ForEach((block) => block.Destroy());
-            //3.3.1 블럭이 제거되는 동안 잠시 Delay, 블럭 제거가 순식간에 일어나는 것에 약간 지연을 시킴
             yield return new WaitForSeconds(0.2f);
 
-            //3.4 3매칭 블럭 있는 경우 true 설정   
             matchResult.value = true;
-
             yield break;
         }
 
-        /*
-         * 모든 블럭의 상태를 현재 블럭 구성 정보를 기준으로 업데이트 한다. (주로 회전 이후 블럭의 각 상태를 업데이트하기 위해 호출된다)
-         * ex) 3개이상 매치된 블럭은 매치상태 설정 등
-         */
+        /// <summary>
+        /// 보드 전체를 돌며 각 칸에서 가로/세로 3매치 여부를 검사하고, 매치된 블록에 MATCH 상태를 붙입니다.
+        /// 이유: Evaluate 진입 시 "지금 보드에 3매치가 있는지"를 한 번에 계산하기 위함.
+        /// </summary>
         public bool UpdateAllBlocksMatchedStatus()
         {
             List<Block> matchedBlockList = new List<Block>();
@@ -154,10 +136,10 @@ namespace Ninez.Board
             return nCount > 0;
         }
 
-        /*
-         * 지정된 row, col의 블럭이 Match 블럭인지 판단한다.
-         * @param matchedBlockList GC 발생을 제거하기 위해 Caller에서 생성해서 전달받는다    
-         */
+        /// <summary>
+        /// (nRow, nCol)을 포함한 가로/세로 3매치가 있으면 해당 블록들에 MATCH 상태를 붙입니다.
+        /// matchedBlockList는 재사용 리스트로 전달해 매 프레임 GC를 줄이기 위함.
+        /// </summary>
         public bool EvalBlocksIfMatched(int nRow, int nCol, List<Block> matchedBlockList)
         {
             bool bFound = false;
@@ -242,23 +224,17 @@ namespace Ninez.Board
             return bFound;
         }
 
-        /*
-         * 리스트에 포함된 전체 블럭의 상태를 MATCH로 변경한다.
-         * @param bHorz 매치된 방향 true이면 세로방향, false이면 가로방향    
-         */
+        /// <summary>매치된 블록 리스트 전체에 MATCH 상태와 매치 개수(3/4/5)를 기록</summary>
         void SetBlockStatusMatched(List<Block> blockList, bool bHorz)
         {
             int nMatchCount = blockList.Count;
             blockList.ForEach(block => block.UpdateBlockStatusMatched((MatchType)nMatchCount));
         }
 
-        /*
-         * 전체 블럭 구성을 재배치한다.
-         * 비어있는 블럭을 위에 있는 블럭으로 채운다.
-         * - MATCH 블럭이 제거된 후에 호출된다.
-         * 
-         * @param unfilledBlocks 다른 블럭으로 채워지지 않고 남겨진 블럭 위치를 리턴받기 위해서 Caller에서 전달한다.  
-         */
+        /// <summary>
+        /// 매칭 제거 후 빈 칸을 위쪽 블록이 떨어져 채우도록 보드 배열을 갱신하고, 드롭 애니메이션을 요청합니다.
+        /// 열 단위로 아래부터 빈 칸을 채우며, dropDistance와 movingBlocks에 기록해 Postprocess에서 대기할 수 있게 합니다.
+        /// </summary>
         public IEnumerator ArrangeBlocksAfterClean(List<IntIntKV> unfilledBlocks, List<Block> movingBlocks)
         {
             SortedList<int, int> emptyBlocks = new SortedList<int, int>();
@@ -332,9 +308,10 @@ namespace Ninez.Board
             yield break;
         }
 
-        /*
-         * 비어있는 블럭 다시 생성해서 전체 보드를 다시 구성한다
-         */
+        /// <summary>
+        /// ArrangeBlocksAfterClean 이후에도 남은 빈 칸(맨 위 등)에 새 블록을 생성하고 위에서 드롭시킵니다.
+        /// 이유: 한 번에 한 열씩 처리해, 각 열의 맨 위 빈 칸들을 새 블록으로 채웁니다.
+        /// </summary>
         public IEnumerator SpawnBlocksAfterClean(List<Block> movingBlocks)
         {
             for (int nCol = 0; nCol < m_nCol; nCol++)
@@ -367,11 +344,10 @@ namespace Ninez.Board
             yield return null;
         }
 
-        /*
-         * 블럭을 생성하고 목적지(nRow, nCol) 까지 드롭한다
-         * @param nRow, nCol : 생성후 보드에 저장되는 위치
-         * @param nSpawnedRow, nSpawnedCol : 화면에 생성되는 위치, nRow, nCol 위치까지 드롭 액션이 연출된다
-         */
+        /// <summary>
+        /// 새 블록을 보드 위쪽(화면 밖)에 생성한 뒤 (nRow, nCol)까지 드롭시키고 보드 배열에 등록.
+        /// nSpawnedRow/nSpawnedCol은 생성 시점의 논리 좌표로, 드롭 거리 계산에 사용됩니다.
+        /// </summary>
         Block SpawnBlockWithDrop(int nRow, int nCol, int nSpawnedRow, int nSpawnedCol)
         {
             float fInitX = CalcInitX(Core.Constants.BLOCK_ORG);
@@ -389,27 +365,19 @@ namespace Ninez.Board
         }
 
 
-        /// <summary>
-        /// 퍼즐의 시작 X 위치를 구한다, left - top좌표
-        /// </summary>
-        /// <param name="offset"></param>
-        /// <returns></returns>
+        /// <summary>보드 왼쪽 끝의 X 좌표(월드). offset으로 셀 중심 정렬(0.5) 등 사용</summary>
         public float CalcInitX(float offset = 0)
         {
-            return -m_nCol / 2.0f + offset;   
+            return -m_nCol / 2.0f + offset;
         }
 
-        //퍼즐의 시작 Y 위치, left - bottom 좌표
-        //하단이 (0, 0) 이므로, 
+        /// <summary>보드 아래쪽 끝의 Y 좌표(월드). Unity 2D는 y 아래가 작은 값</summary>
         public float CalcInitY(float offset = 0)
         {
             return -m_nRow / 2.0f + offset;
         }
 
-        /*
-         * 지정된 위치가 셔플 가능한 조건인지 체크한다
-         * @bLoading true if stage being loading , on playing is false
-         */
+        /// <summary>해당 칸의 셀이 블록 이동 가능 타입이면 true. 셔플/스와이프 가능 여부에 사용</summary>
         public bool CanShuffle(int nRow, int nCol, bool bLoading)
         {
             if (!m_Cells[nRow, nCol].type.IsBlockMovableType())
@@ -418,9 +386,7 @@ namespace Ninez.Board
             return true;
         }
 
-        /*
-         * Block의 종류(breed)를 변경한다.
-         */
+        /// <summary>블록 breed를 notAllowedBreed를 제외한 랜덤으로 변경. 셔플 시 3매치가 안 나도록 할 때 사용</summary>
         public void ChangeBlock(Block block, BlockBreed notAllowedBreed)
         {
             BlockBreed genBreed;
@@ -438,14 +404,13 @@ namespace Ninez.Board
             block.breed = genBreed;
         }
 
+        /// <summary>해당 칸이 스와이프(블록 교환) 가능한 셀인지</summary>
         public bool IsSwipeable(int nRow, int nCol)
         {
             return m_Cells[nRow, nCol].type.IsBlockMovableType();
         }
 
-        /*
-         * 블럭이 지정된 위치에 새로 할당 될 수 있는지 체크한다
-         */
+        /// <summary>블록이 (nRow, nCol)에 배치 가능한지: 셀이 배치 가능 타입이고, 그 칸이 비어 있어야 함</summary>
         bool CanBlockBeAllocatable(int nRow, int nCol)
         {
             if (!m_Cells[nRow, nCol].type.IsBlockAllocatableType())

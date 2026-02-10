@@ -1,4 +1,11 @@
-﻿using System.Collections;
+// ============================================================================
+// Cell.cs - 보드 한 칸의 셀 데이터 (타입, GameObject 연결)
+// ============================================================================
+// 설명: 각 칸이 빈칸/기본/장애물 등 어떤 타입인지 저장하고, 해당 칸의 배경 GameObject와 연결합니다.
+// 이유: 블록 배치·이동 가능 여부는 셀 타입으로 판단하고, 시각은 CellBehaviour가 담당해 역할을 나눕니다.
+// ============================================================================
+
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,9 +13,6 @@ namespace Ninez.Board
 {
     public class Cell
     {
-        //-------------------------------------------------------
-        // Member variable, Property
-        //-------------------------------------------------------
         protected CellType m_CellType;
         public CellType type
         {
@@ -27,48 +31,27 @@ namespace Ninez.Board
             }
         }
 
-        //-------------------------------------------------------
-        // Constructor
-        //-------------------------------------------------------
         public Cell(CellType cellType)
         {
             m_CellType = cellType;
         }
 
-        //-------------------------------------------------------
-        // Methods
-        //-------------------------------------------------------
-
-        /// <summary>
-        /// 주어진 prefab을 이용해서 Cell GameObject를 생성(Instantiate)한다.
-        /// </summary>
-        /// <param name="cellPrefab">Cell Prefab</param>
-        /// <param name="containerObj">생성된 GameObject의 부모(Board GameObject)</param>
-        /// <returns></returns>
+        /// <summary>Cell Prefab으로 GameObject를 생성해 컨테이너 자식으로 넣고, CellBehaviour 참조를 저장합니다.</summary>
         public Cell InstantiateCellObj(GameObject cellPrefab, Transform containerObj)
         {
-            //1. Cell 오브젝트를 생성한다.
             GameObject newObj = Object.Instantiate(cellPrefab, new Vector3(0, 0, 0), Quaternion.identity);
-
-            //2. 컨테이너(Board)의 차일드로 Cell을 포함시킨다.
             newObj.transform.parent = containerObj;
-
-            //3. Cell 오브젝트에 적용된 CellBehaviour 컴포너트를 보관한다.
             this.cellBehaviour = newObj.transform.GetComponent<CellBehaviour>();
-
             return this;
         }
 
-        /// <summary>
-        /// Cell에 연결된 GameObject 위치(position)를 이동시킨다
-        /// </summary>
-        /// <param name="x">이동할 x 위치</param>
-        /// <param name="y">이동할 y 위치</param>
+        /// <summary>연결된 셀 GameObject를 지정 좌표로 이동 (보드 배치 시 사용)</summary>
         public void Move(float x, float y)
         {
             cellBehaviour.transform.position = new Vector3(x, y);
         }
 
+        /// <summary>장애물(빈칸 등)이면 true. 블록이 이 칸을 "막힌 칸"으로 간주할 때 사용</summary>
         public bool IsObstracle()
         {
             return type == CellType.EMPTY;

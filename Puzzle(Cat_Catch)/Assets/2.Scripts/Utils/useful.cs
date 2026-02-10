@@ -1,22 +1,19 @@
-﻿using System.Collections.Generic;
+// ============================================================================
+// useful.cs - SortedList 등 유틸리티 확장 메서드
+// ============================================================================
+// 설명: SortedList의 "첫 번째 요소"를 KeyValuePair로 반환하는 확장 메서드. BoardShuffler에서 빈 칸 처리 시 사용합니다.
+// 이유: .NET SortedList에는 First()가 없어, Keys[0]/Values[0]으로 접근하는 코드를 한 곳에 모아 가독성을 높입니다.
+// ============================================================================
 
-namespace Ninez.Util
+using System.Collections.Generic;
+
+public static class SortedListMethods
 {
-    public static class SortedListMethods
+    /// <summary>SortedList의 첫 번째 키-값 쌍 반환. 비어 있으면 default. 호출 전 Count 확인 권장</summary>
+    public static KeyValuePair<T1, T2> First<T1, T2>(this SortedList<T1, T2> sortedList)
     {
-        /**
-         * SortedList 확장 메소드.
-         * 첫번째 노드의 key-value 를 구한다.
-         * (주의) 비어있는 경우 T1, T2 타입의 디폴값이 전달되므로 호출전에 비어있는지 체크하는 것이 안정한다.
-         * 
-         * 사용 예) KeyValuePair<int, Vector2) kv = sortedList.First();
-         */
-        public static KeyValuePair<T1, T2> First<T1, T2>(this SortedList<T1, T2> sortedList)
-        {
-            if (sortedList.Count == 0)
-                return new KeyValuePair<T1, T2>();
-
-            return new KeyValuePair<T1, T2>(sortedList.Keys[0], sortedList.Values[0]);
-        }
+        if (sortedList.Count == 0)
+            return new KeyValuePair<T1, T2>();
+        return new KeyValuePair<T1, T2>(sortedList.Keys[0], sortedList.Values[0]);
     }
 }

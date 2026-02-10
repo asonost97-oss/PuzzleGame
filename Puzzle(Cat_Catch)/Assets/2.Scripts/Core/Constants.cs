@@ -1,11 +1,18 @@
-﻿using UnityEngine;
+// ============================================================================
+// Constants.cs - 게임 전역 상수
+// ============================================================================
+// 설명: 블록 원점 오프셋, 스와이프 시간, 제거 시 스케일 등 숫자를 한 곳에 모아 조정하기 쉽게 합니다.
+// 이유: 매직 넘버를 제거하고, 밸런스 수정 시 이 파일만 보면 됩니다.
+// ============================================================================
+
+using UnityEngine;
 
 namespace Ninez.Core
 {
     public static class Constants
     {
-        public static float BLOCK_ORG = 0.5f;           //블럭의 출력 원점
-        public static float SWIPE_DURATION = 0.2f;      //블럭 스와이프 애니메이션 시간
-        public static float BLOCK_DESTROY_SCALE = 0.3f; //블럭이 삭제될 때 줄어드는 크기
+        public static float BLOCK_ORG = 0.5f;           // 블록/셀 위치 계산 시 셀 중심 정렬용 오프셋
+        public static float SWIPE_DURATION = 0.2f;     // 스와이프 시 두 블록이 자리 바꿀 때 걸리는 시간
+        public static float BLOCK_DESTROY_SCALE = 0.3f; // 블록 제거 연출 시 최종 축소 비율 (1 → 0.3)
     }
 }

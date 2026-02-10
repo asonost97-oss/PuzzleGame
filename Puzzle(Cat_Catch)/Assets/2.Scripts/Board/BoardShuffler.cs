@@ -1,4 +1,11 @@
-﻿using System.Collections.Generic;
+// ============================================================================
+// BoardShuffler.cs - 보드 셔플 (시작 시 3매치가 없도록 블록 재배치)
+// ============================================================================
+// 설명: 셔플 가능한 칸의 블록만 골라 랜덤 순서로 재배치하고, 각 위치에 놓였을 때 가로/세로 3매치가 나지 않도록 breed를 조정합니다.
+// 이유: 게임 시작 시 풀 수 있는 보드를 만들기 위해, 중복 정보(horzDuplicate, vertDuplicate)를 이용해 배치 가능한 블록만 넣습니다.
+// ============================================================================
+
+using System.Collections.Generic;
 using UnityEngine;
 using Ninez.Core;
 
@@ -9,11 +16,11 @@ namespace Ninez.Board
     public class BoardShuffler
     {
         Board m_Board;
-        bool m_bLoadingMode;
+        bool m_bLoadingMode;  // true: 스테이지 로딩 시, false: 플레이 중 (현재 로직에서는 동일 처리)
 
-        SortedList<int, BlockVectorKV> m_OrgBlocks = new SortedList<int, BlockVectorKV>();
+        SortedList<int, BlockVectorKV> m_OrgBlocks = new SortedList<int, BlockVectorKV>();  // 랜덤 키로 정렬해 순서 뒤섞기
         IEnumerator<KeyValuePair<int, BlockVectorKV>> m_it;
-        Queue<BlockVectorKV> m_UnusedBlocks = new Queue<BlockVectorKV>();
+        Queue<BlockVectorKV> m_UnusedBlocks = new Queue<BlockVectorKV>();  // 현재 위치에 놓으면 3매치가 되는 블록들 (다른 위치에 재사용)
         bool m_bListComplete;
 
         public BoardShuffler(Board board, bool bLoadingMode)
@@ -22,18 +29,15 @@ namespace Ninez.Board
             m_bLoadingMode = bLoadingMode;
         }
 
+        /// <summary>보드 전체를 셔플해 3매치가 없는 초기 배치로 만듦. ComposeStage에서 호출</summary>
         public void Shuffle(bool bAnimation = false)
         {
-            //1. 셔플 대비해서 각 블럭의 매칭 정보를 업데이트한다
             PrepareDuplicationDatas();
-
-            //2. 셔플 대상 블럭을 별도 리스트에 보관한다
             PrepareShuffleBlocks();
-
-            //3. 1), 2)에서 준비한 데이터를 이용하여 셔플을 수행한다.
             RunShuffle(bAnimation);
         }
 
+        /// <summary>셔플 시 다음에 배치할 블록 반환. 큐 우선, 없으면 정렬된 리스트에서 순서대로. 리스트 끝나면 null 표시</summary>
         BlockVectorKV NextBlock(bool bUseQueue)
         {
             if (bUseQueue && m_UnusedBlocks.Count > 0)
@@ -43,7 +47,6 @@ namespace Ninez.Board
                 return m_it.Current.Value;
 
             m_bListComplete = true;
-
             return new BlockVectorKV(null, Vector2Int.zero);
         }
 
@@ -133,9 +136,7 @@ namespace Ninez.Board
             } 
         } 
 
-        /**
-         * 지정된 위치에 배치할 수 있는 3매치되지 않는 블럭을 한다.
-         */
+        /// <summary>지정 위치에 놓아도 가로/세로 3매치가 나지 않는 블록을 찾아 배치하고 반환. 안 되면 큐에 넣고 다음 후보 시도</summary>
         Block GetShuffledBlock(int nRow, int nCol)
         {
             BlockBreed prevBreed = BlockBreed.NA;   //처음 비교시에 종류를 저장
@@ -203,9 +204,7 @@ namespace Ninez.Board
             }
         }
 
-        /**
-         * 상하좌우 인접 블럭과 겹치는 개수를 계산한다
-         */
+        /// <summary>현재 블록을 (nRow,nCol)에 놓았을 때 가로/세로로 같은 breed가 연속된 개수. 3 이상이면 배치 불가</summary>
         Vector2Int CalcDuplications(int nRow, int nCol, Block block)
         {
             int colDup = 1, rowDup = 1;
