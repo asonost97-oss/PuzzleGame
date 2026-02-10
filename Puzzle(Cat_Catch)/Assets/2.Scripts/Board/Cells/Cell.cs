@@ -1,58 +1,118 @@
-// ============================================================================
-// Cell.cs - 보드 한 칸의 셀 데이터 (타입, GameObject 연결)
-// ============================================================================
-// 설명: 각 칸이 빈칸/기본/장애물 등 어떤 타입인지 저장하고, 해당 칸의 배경 GameObject와 연결합니다.
-// 이유: 블록 배치·이동 가능 여부는 셀 타입으로 판단하고, 시각은 CellBehaviour가 담당해 역할을 나눕니다.
-// ============================================================================
+// =============================================================================
+// Cell.cs — 셀 타입 정의, 데이터, 표시, 생성 (통합)
+// =============================================================================
 
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
+// -----------------------------------------------------------------------------
+// [1] 셀 타입 정의 — 보드 칸 종류 + 블록 배치/이동 가능 여부
+// -----------------------------------------------------------------------------
+public enum CellType
+{
+    EMPTY = 0,   // 빈칸, 블록 배치·이동 불가
+    BASIC = 1,   // 기본 칸 (배치·이동 가능)
+    FIXTURE = 2,
+    JELLY = 3,
+}
+
+// 역할: 셀 타입으로 블록 배치 가능/이동 가능 판정 (Board, StageBuilder에서 사용)
+static class CellTypeMethod
+{
+    public static bool IsBlockAllocatableType(this CellType t) => t != CellType.EMPTY;
+    public static bool IsBlockMovableType(this CellType t) => t != CellType.EMPTY;
+}
+
+// -----------------------------------------------------------------------------
+// [2] 셀 데이터 — 타입 + GameObject(CellManager 또는 CellBehaviour) 연결
+// -----------------------------------------------------------------------------
 public class Cell
 {
     protected CellType m_CellType;
-    public CellType type
-    {
-        get { return m_CellType; }
-        set { m_CellType = value; }
-    }
+    public CellType type { get => m_CellType; set => m_CellType = value; }
 
+    protected CellManager m_CellManager;
     protected CellBehaviour m_CellBehaviour;
-    public CellBehaviour cellBehaviour
-    {
-        get { return m_CellBehaviour; }
-        set
-        {
-            m_CellBehaviour = value;
-            m_CellBehaviour.SetCell(this);
-        }
-    }
 
-    public Cell(CellType cellType)
-    {
-        m_CellType = cellType;
-    }
+    public Cell(CellType cellType) => m_CellType = cellType;
 
-    /// <summary>Cell Prefab으로 GameObject를 생성해 컨테이너 자식으로 넣고, CellBehaviour 참조를 저장합니다.</summary>
+    // 역할: 프리팹으로 셀 GameObject 생성. CellManager 우선, 없으면 CellBehaviour 사용
     public Cell InstantiateCellObj(GameObject cellPrefab, Transform containerObj)
     {
-        GameObject newObj = Object.Instantiate(cellPrefab, new Vector3(0, 0, 0), Quaternion.identity);
-        newObj.transform.parent = containerObj;
-        this.cellBehaviour = newObj.transform.GetComponent<CellBehaviour>();
+        var go = Object.Instantiate(cellPrefab, Vector3.zero, Quaternion.identity);
+        go.transform.parent = containerObj;
+        var manager = go.GetComponent<CellManager>();
+        if (manager != null)
+        {
+            m_CellManager = manager;
+            m_CellBehaviour = null;
+            manager.SetCell(this);
+            return this;
+        }
+        var behaviour = go.GetComponent<CellBehaviour>();
+        if (behaviour != null)
+        {
+            m_CellManager = null;
+            m_CellBehaviour = behaviour;
+            behaviour.SetCell(this);
+            return this;
+        }
+        Debug.LogError($"Cell 프리팹에 CellManager 또는 CellBehaviour 스크립트가 없습니다. 프리팹: {cellPrefab.name}");
         return this;
     }
 
-    /// <summary>연결된 셀 GameObject를 지정 좌표로 이동 (보드 배치 시 사용)</summary>
     public void Move(float x, float y)
     {
-        cellBehaviour.transform.position = new Vector3(x, y);
+        var t = m_CellManager != null ? m_CellManager.transform : m_CellBehaviour?.transform;
+        if (t != null) t.position = new Vector3(x, y);
     }
 
-    /// <summary>장애물(빈칸 등)이면 true. 블록이 이 칸을 "막힌 칸"으로 간주할 때 사용</summary>
-    public bool IsObstracle()
+    // 역할: 장애물(빈칸)이면 true. Board 매칭/드롭 시 "막힌 칸" 판정에 사용
+    public bool IsObstracle() => type == CellType.EMPTY;
+}
+
+// -----------------------------------------------------------------------------
+// [3] 셀 표시 — Cell과 1:1 연결, 스프라이트·스케일
+// -----------------------------------------------------------------------------
+public class CellBehaviour : MonoBehaviour
+{
+    Cell m_Cell;
+    SpriteRenderer m_SpriteRenderer;
+
+    void Start()
     {
-        return type == CellType.EMPTY;
+        m_SpriteRenderer = GetComponent<SpriteRenderer>();
+        UpdateView(false);
+        FitToCellSize(1f);
+    }
+
+    // 역할: 셀을 지정 월드 크기(cellSize)에 맞춰 스케일
+    public void FitToCellSize(float cellSize)
+    {
+        if (m_SpriteRenderer == null || m_SpriteRenderer.sprite == null) return;
+        var size = m_SpriteRenderer.sprite.bounds.size;
+        if (size.x <= 0 || size.y <= 0) return;
+        transform.localScale = new Vector3(cellSize / size.x, cellSize / size.y, 1f);
+    }
+
+    public void SetCell(Cell cell) => m_Cell = cell;
+
+    public void UpdateView(bool bValueChanged)
+    {
+        if (m_Cell.type == CellType.EMPTY) m_SpriteRenderer.sprite = null;
     }
 }
 
+// -----------------------------------------------------------------------------
+// [4] 셀 생성 — StageInfo (row,col) → CellType → Cell 인스턴스
+// -----------------------------------------------------------------------------
+public static class CellFactory
+{
+    // 역할: 스테이지 데이터에서 (row,col) 셀 타입을 읽어 해당 타입의 Cell 생성
+    public static Cell SpawnCell(StageInfo stageInfo, int nRow, int nCol)
+    {
+        Debug.Assert(stageInfo != null && nRow < stageInfo.row && nCol < stageInfo.col);
+        return SpawnCell(stageInfo.GetCellType(nRow, nCol));
+    }
+
+    public static Cell SpawnCell(CellType cellType) => new Cell(cellType);
+}

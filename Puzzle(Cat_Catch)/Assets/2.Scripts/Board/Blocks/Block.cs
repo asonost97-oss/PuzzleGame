@@ -1,248 +1,257 @@
-// ============================================================================
-// Block.cs - 퍼즐 게임의 개별 블록 데이터/로직 클래스
-// ============================================================================
-// 설명: 보드 위 한 칸을 차지하는 블록의 상태, 종류, 매칭 정보를 담당합니다.
-// 이유: 게임 로직(데이터)과 화면 표시(Behaviour)를 분리해 유지보수와 테스트를 쉽게 합니다.
-// ============================================================================
-    
+// =============================================================================
+// Block.cs — 블록 타입 정의, 데이터/로직, 표시, 드롭 연출, 생성 (통합)
+// =============================================================================
+
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+
+// -----------------------------------------------------------------------------
+// [1] 블록 타입·상태 정의 — EMPTY/BASIC, breed, NORMAL/MATCH/CLEAR, 퀘스트 효과
+// -----------------------------------------------------------------------------
+public enum BlockType { EMPTY = 0, BASIC = 1 }
+
+public enum BlockBreed
+{
+    NA = -1, BREED_0 = 0, BREED_1 = 1, BREED_2 = 2, BREED_3 = 3, BREED_4 = 4, BREED_5 = 5,
+}
+
+public enum BlockStatus { NORMAL, MATCH, CLEAR }
+
+public enum BlockQuestType
+{
+    NONE = -1, CLEAR_SIMPLE = 0, CLEAR_HORZ = 1, CLEAR_VERT = 2, CLEAR_CIRCLE = 3,
+    CLEAR_LAZER = 4, CLEAR_HORZ_BUFF = 5, CLEAR_VERT_BUFF = 6, CLEAR_CIRCLE_BUFF = 7, CLEAR_LAZER_BUFF = 8,
+}
+
+// 역할: null 체크 후 IsEqual 호출 — Board 매칭 검사 시 NullReference 방지
+static class BlockMethod
+{
+    public static bool IsSafeEqual(this Block block, Block target) => block != null && block.IsEqual(target);
+}
+
+// -----------------------------------------------------------------------------
+// [2] 블록 데이터·로직 — 상태, breed, 매칭, 평가, GameObject 연결
+// -----------------------------------------------------------------------------
 public class Block
 {
-    //---------------------------------------------------------------------
-    // Members (멤버 변수)
-    //---------------------------------------------------------------------
-    // 현재 블록 상태: NORMAL(평상시), MATCH(3매치됨), CLEAR(제거 예정)
     public BlockStatus status;
     public BlockQuestType questType;
     public MatchType match = MatchType.NONE;
     public short matchCount;
-    
+
     BlockType m_BlockType;
-        // 블록 타입: EMPTY(빈칸), BASIC(일반 블록) - 빈칸은 GameObject를 만들지 않음
-    public BlockType type
-    {
-        get { return m_BlockType; }
-        set { m_BlockType = value; }
-    }
-    
+    public BlockType type { get => m_BlockType; set => m_BlockType = value; }
+
     protected BlockBreed m_Breed;
     public BlockBreed breed
     {
-        get { return m_Breed; }
-        set
-        {
-            m_Breed = value;
-            m_BlockBehaviour?.UpdateView(true);
-        }
+        get => m_Breed;
+        set { m_Breed = value; m_BlockManager?.UpdateView(true); m_BlockBehaviour?.UpdateView(true); }
     }
-    
+
+    protected BlockManager m_BlockManager;
     protected BlockBehaviour m_BlockBehaviour;
-    public BlockBehaviour blockBehaviour
-    {
-        get { return m_BlockBehaviour; }
-        set
-        {
-            m_BlockBehaviour = value;
-            m_BlockBehaviour.SetBlock(this);
-        }
-    }
-    
-    public Transform blockObj { get { return m_BlockBehaviour?.transform; } }
-    
-    Vector2Int m_vtDuplicate;
-    public int horzDuplicate
-    {
-        get { return m_vtDuplicate.x; }
-        set { m_vtDuplicate.x = value; }
-    }
-    
-    public int vertDuplicate
-    {
-        get { return m_vtDuplicate.y; }
-        set { m_vtDuplicate.y = value; }
-    }
-    
-    int m_nDurability;
-    public virtual int durability
-    {
-        get { return m_nDurability; }
-        set { m_nDurability = value; }
-    }
-    
     protected BlockActionBehaviour m_BlockActionBehaviour;
-    
-    public bool isMoving
-    {
-        get
-        {
-            return blockObj != null && m_BlockActionBehaviour.isMoving;
-        }
-    }
-    
+
+    public BlockBehaviour blockBehaviour => m_BlockBehaviour;
+
+    public Transform blockObj => m_BlockManager != null ? m_BlockManager.transform : m_BlockBehaviour?.transform;
+
+    Vector2Int m_vtDuplicate;
+    public int horzDuplicate { get => m_vtDuplicate.x; set => m_vtDuplicate.x = value; }
+    public int vertDuplicate { get => m_vtDuplicate.y; set => m_vtDuplicate.y = value; }
+
+    int m_nDurability;
+    public virtual int durability { get => m_nDurability; set => m_nDurability = value; }
+
+    public bool isMoving => m_BlockManager != null ? m_BlockManager.isMoving : (blockObj != null && m_BlockActionBehaviour != null && m_BlockActionBehaviour.isMoving);
+
     public Vector2 dropDistance
     {
-        set
-        {
-            m_BlockActionBehaviour?.MoveDrop(value);
-        }
+        set { if (m_BlockManager != null) m_BlockManager.MoveDrop(value); else m_BlockActionBehaviour?.MoveDrop(value); }
     }
-    
+
     public Block(BlockType blockType)
+    {
+        m_BlockType = blockType;
+        status = BlockStatus.NORMAL;
+        questType = BlockQuestType.CLEAR_SIMPLE;
+        match = MatchType.NONE;
+        m_Breed = BlockBreed.NA;
+        m_nDurability = 1;
+    }
+
+    // 역할: EMPTY가 아니면 프리팹으로 GameObject 생성. BlockManager 우선, 없으면 BlockBehaviour+BlockActionBehaviour
+    internal Block InstantiateBlockObj(GameObject blockPrefab, Transform containerObj)
+    {
+        if (!IsValidate()) return null;
+        var go = Object.Instantiate(blockPrefab, Vector3.zero, Quaternion.identity);
+        go.transform.parent = containerObj;
+        var manager = go.GetComponent<BlockManager>();
+        if (manager != null)
         {
-            m_BlockType = blockType;
-    
-            status = BlockStatus.NORMAL;
-            questType = BlockQuestType.CLEAR_SIMPLE;
-            match = MatchType.NONE;
-            m_Breed = BlockBreed.NA;
-    
-            m_nDurability = 1;
-        }
-    
-        //---------------------------------------------------------------------
-        // Methods (메서드)
-        //---------------------------------------------------------------------
-    
-        /// <summary>
-        /// 블럭을 디스플레이하는 GameObject를 생성한다. 출력이 필요한 경우에만 생성한다.
-        /// 이유: EMPTY 블록은 화면에 그리지 않아 성능과 계층 구조를 단순하게 유지.
-        /// </summary>
-        /// <param name="blockPrefab">블록 프리팹</param>
-        /// <param name="containerObj">부모 Transform(보드)</param>
-        /// <returns>비어있는 블럭이면 null, 유효하면 this</returns>
-        internal Block InstantiateBlockObj(GameObject blockPrefab, Transform containerObj)
-        {
-            if (IsValidate() == false)
-                return null;
-    
-            GameObject newObj = Object.Instantiate(blockPrefab, new Vector3(0, 0, 0), Quaternion.identity);
-            newObj.transform.parent = containerObj;
-    
-            this.blockBehaviour = newObj.transform.GetComponent<BlockBehaviour>();
-            m_BlockActionBehaviour = newObj.transform.GetComponent<BlockActionBehaviour>();
-    
+            m_BlockManager = manager;
+            m_BlockBehaviour = null;
+            m_BlockActionBehaviour = null;
+            manager.SetBlock(this);
             return this;
         }
-    
-        /// <summary>
-        /// 매칭된 블록에 대해 게임 규칙을 적용 (내구도 감소, CLEAR 처리 등).
-        /// 이유: Board.Evaluate에서 모든 칸을 순회하며 호출해, 매치된 블록만 최종 CLEAR로 만듦.
-        /// </summary>
-        /// <returns>특수 블록 처리 필요 시 true, 일반 처리만 하면 false</returns>
-        public bool DoEvaluation(BoardEnumerator boardEnumerator, int nRow, int nCol)
-        {
-            Debug.Assert(boardEnumerator != null, $"({nRow},{nCol})");
-    
-            if (!IsEvaluatable())
-                return false;
-    
-            if (status == BlockStatus.MATCH)
-            {
-                // 단순 제거 또는 케이지 셀인 경우 내구도만 감소
-                if (questType == BlockQuestType.CLEAR_SIMPLE || boardEnumerator.IsCageTypeCell(nRow, nCol)) //TODO cagetype cell 조건이 필요한가? 
-                {
-                    Debug.Assert(m_nDurability > 0, $"durability is zero : {m_nDurability}");
-                    durability--;
-                }
-                else // 가로/세로/원형 등 특수 블록은 별도 처리
-                {
-                    return true;
-                }
-    
-                if (m_nDurability == 0)
-                {
-                    status = BlockStatus.CLEAR;
-                    return false;
-                }
-            }
-    
-            // 아직 매치가 아니거나 처리 후: 상태 초기화
-            status = BlockStatus.NORMAL;
-            match = MatchType.NONE;
-            matchCount = 0;
-    
-            return false;
-        }
-    
-        /// <summary>
-        /// 이 블록을 "매칭됨" 상태로 표시하고, 매치 타입/개수를 기록.
-        /// bAccumulate: 가로+세로 동시 매치처럼 여러 매치를 합칠 때 true.
-        /// </summary>
-        public void UpdateBlockStatusMatched(MatchType matchType, bool bAccumulate = true)
-        {
-            this.status = BlockStatus.MATCH;
-    
-            if (match == MatchType.NONE)
-            {
-                this.match = matchType;
-            }
-            else
-            {
-                this.match = bAccumulate ? match.Add(matchType) : matchType; //match + matchType
-            }
-    
-            matchCount = (short)matchType;
-        }
-    
-        /// <summary>지정된 월드 좌표로 블록 GameObject를 즉시 이동 (셔플/배치 시 사용)</summary>
-        internal void Move(float x, float y)
-        {
-            blockBehaviour.transform.position = new Vector3(x, y);
-        }
-    
-        /// <summary>지정 시간 동안 목표 위치로 이동하는 코루틴 실행 (스와이프 애니메이션용)</summary>
-        public void MoveTo(Vector3 to, float duration)
-        {
-            m_BlockBehaviour.StartCoroutine(Action2D.MoveTo(blockObj, to, duration));
-        }
-    
-        /// <summary>블록 제거 연출(축소+파티클) 후 GameObject 제거. Board.Evaluate에서 CLEAR 블록에 호출</summary>
-        public virtual void Destroy()
-        {
-            Debug.Assert(blockObj != null, $"{match}");
-            blockBehaviour.DoActionClear();
-        }
-    
-        /// <summary>EMPTY가 아니면 true. GameObject 생성 여부 판단에 사용</summary>
-        public bool IsValidate()
-        {
-            return type != BlockType.EMPTY;
-        }
-    
-        /// <summary>셔플 전에 가로/세로 중복 카운트 초기화. 셔플 알고리즘이 다시 계산함</summary>
-        public void ResetDuplicationInfo()
-        {
-            m_vtDuplicate.x = 0;
-            m_vtDuplicate.y = 0;
-        }
-    
-        /// <summary>같은 종류(breed)의 매칭 가능 블록이면 true. 3매치 판정에 사용</summary>
-        public bool IsEqual(Block target)
-        {
-            if (IsMatchableBlock() && this.breed == target.breed)
-                return true;
-            return false;
-        }
-    
-        /// <summary>3매치로 제거 가능한 블록인지 (EMPTY가 아니면 true)</summary>
-        public bool IsMatchableBlock()
-        {
-            return !(type == BlockType.EMPTY);
-        }
-    
-        /// <summary>기준 블록과 스와이프(교환) 가능한지. 확장 시 특수 블록별 제한 가능</summary>
-        public bool IsSwipeable(Block baseBlock)
-        {
-            return true;
-        }
-    
-        /// <summary>DoEvaluation 대상인지. 이미 CLEAR였거나 매칭 불가 블록이면 false</summary>
-        public bool IsEvaluatable()
-        {
-            if (status == BlockStatus.CLEAR || !IsMatchableBlock())
-                return false;
-            return true;
-        }
+        m_BlockManager = null;
+        m_BlockBehaviour = go.GetComponent<BlockBehaviour>();
+        m_BlockActionBehaviour = go.GetComponent<BlockActionBehaviour>();
+        if (m_BlockBehaviour != null) m_BlockBehaviour.SetBlock(this);
+        return this;
     }
+
+    // 역할: 매칭된 블록에 규칙 적용(내구도 감소, CLEAR). Board.Evaluate에서 호출
+    public bool DoEvaluation(BoardEnumerator boardEnumerator, int nRow, int nCol)
+    {
+        Debug.Assert(boardEnumerator != null);
+        if (!IsEvaluatable()) return false;
+
+        if (status == BlockStatus.MATCH)
+        {
+            if (questType == BlockQuestType.CLEAR_SIMPLE || boardEnumerator.IsCageTypeCell(nRow, nCol))
+            {
+                Debug.Assert(m_nDurability > 0);
+                durability--;
+            }
+            else return true;
+
+            if (m_nDurability == 0) { status = BlockStatus.CLEAR; return false; }
+        }
+
+        status = BlockStatus.NORMAL;
+        match = MatchType.NONE;
+        matchCount = 0;
+        return false;
+    }
+
+    // 역할: 이 블록을 "매칭됨"으로 표시, 매치 타입/개수 기록 (가로+세로 동시 시 bAccumulate)
+    public void UpdateBlockStatusMatched(MatchType matchType, bool bAccumulate = true)
+    {
+        status = BlockStatus.MATCH;
+        match = match == MatchType.NONE ? matchType : (bAccumulate ? match.Add(matchType) : matchType);
+        matchCount = (short)matchType;
+    }
+
+    internal void Move(float x, float y) { if (blockObj != null) blockObj.position = new Vector3(x, y); }
+
+    // 역할: 목표 위치로 duration 동안 이동 (스와이프 애니메이션)
+    public void MoveTo(Vector3 to, float duration)
+    {
+        var runner = m_BlockManager != null ? (MonoBehaviour)m_BlockManager : m_BlockBehaviour;
+        if (runner != null && blockObj != null) runner.StartCoroutine(Action2D.MoveTo(blockObj, to, duration));
+    }
+
+    public virtual void Destroy()
+    {
+        if (m_BlockManager != null) m_BlockManager.DoActionClear();
+        else if (m_BlockBehaviour != null) m_BlockBehaviour.DoActionClear();
+    }
+
+    public bool IsValidate() => type != BlockType.EMPTY;
+    public void ResetDuplicationInfo() { m_vtDuplicate.x = 0; m_vtDuplicate.y = 0; }
+    public bool IsEqual(Block target) => IsMatchableBlock() && target != null && breed == target.breed;
+    public bool IsMatchableBlock() => type != BlockType.EMPTY;
+    public bool IsSwipeable(Block baseBlock) => true;
+    public bool IsEvaluatable() => status != BlockStatus.CLEAR && IsMatchableBlock();
+}
+
+// -----------------------------------------------------------------------------
+// [3] 블록 표시·제거 연출 — 스프라이트, 셀 크기 맞춤, 폭발 후 제거
+// -----------------------------------------------------------------------------
+public class BlockBehaviour : MonoBehaviour
+{
+    Block m_Block;
+    SpriteRenderer m_SpriteRenderer;
+    [SerializeField] BlockConfig m_BlockConfig;
+
+    void Start()
+    {
+        m_SpriteRenderer = GetComponent<SpriteRenderer>();
+        UpdateView(false);
+        FitToCellSize(1f);
+    }
+
+    public void FitToCellSize(float cellSize)
+    {
+        if (m_SpriteRenderer == null || m_SpriteRenderer.sprite == null) return;
+        var size = m_SpriteRenderer.sprite.bounds.size;
+        if (size.x <= 0 || size.y <= 0) return;
+        transform.localScale = new Vector3(cellSize / size.x, cellSize / size.y, 1f);
+    }
+
+    internal void SetBlock(Block block) => m_Block = block;
+
+    public void UpdateView(bool bValueChanged)
+    {
+        if (m_Block.type == BlockType.EMPTY) m_SpriteRenderer.sprite = null;
+        else if (m_Block.type == BlockType.BASIC) m_SpriteRenderer.sprite = m_BlockConfig.basicBlockSprites[(int)m_Block.breed];
+    }
+
+    public void DoActionClear() => StartCoroutine(CoStartSimpleExplosion(true));
+
+    IEnumerator CoStartSimpleExplosion(bool bDestroy = true)
+    {
+        yield return Action2D.Scale(transform, Constants.BLOCK_DESTROY_SCALE, 4f);
+        var explosionObj = m_BlockConfig.GetExplosionObject(BlockQuestType.CLEAR_SIMPLE);
+        var main = explosionObj.GetComponent<ParticleSystem>().main;
+        main.startColor = m_BlockConfig.GetBlockColor(m_Block.breed);
+        explosionObj.SetActive(true);
+        explosionObj.transform.position = transform.position;
+        yield return new WaitForSeconds(0.1f);
+        if (bDestroy) Destroy(gameObject);
+        else Debug.Assert(false);
+    }
+}
+
+// -----------------------------------------------------------------------------
+// [4] 블록 드롭(낙하) 연출 — 이동 큐, dropSpeed에 따라 연속 낙하
+// -----------------------------------------------------------------------------
+public class BlockActionBehaviour : MonoBehaviour
+{
+    [SerializeField] BlockConfig m_BlockConfig;
+    public bool isMoving { get; set; }
+    Queue<Vector3> m_MovementQueue = new Queue<Vector3>();
+
+    public void MoveDrop(Vector2 vtDropDistance)
+    {
+        m_MovementQueue.Enqueue(new Vector3(vtDropDistance.x, vtDropDistance.y, 1));
+        if (!isMoving) StartCoroutine(DoActionMoveDrop());
+    }
+
+    IEnumerator DoActionMoveDrop(float acc = 1.0f)
+    {
+        isMoving = true;
+        while (m_MovementQueue.Count > 0)
+        {
+            var dest = m_MovementQueue.Dequeue();
+            int dropIndex = Mathf.Clamp((int)Mathf.Abs(dest.y), 1, 9);
+            float duration = m_BlockConfig.dropSpeed[dropIndex - 1];
+            yield return CoStartDropSmooth(dest, duration * acc);
+        }
+        isMoving = false;
+    }
+
+    IEnumerator CoStartDropSmooth(Vector2 vtDropDistance, float duration)
+    {
+        var to = new Vector2(transform.position.x + vtDropDistance.x, transform.position.y - vtDropDistance.y);
+        yield return Action2D.MoveTo(transform, to, duration);
+    }
+}
+
+// -----------------------------------------------------------------------------
+// [5] 블록 생성 — BlockType에 맞는 Block 생성, BASIC이면 breed 랜덤
+// -----------------------------------------------------------------------------
+public static class BlockFactory
+{
+    public static Block SpawnBlock(BlockType blockType)
+    {
+        var block = new Block(blockType);
+        if (blockType == BlockType.BASIC) block.breed = (BlockBreed)Random.Range(0, 6);
+        else if (blockType == BlockType.EMPTY) block.breed = BlockBreed.NA;
+        return block;
+    }
+}

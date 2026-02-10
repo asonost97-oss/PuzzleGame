@@ -2,6 +2,8 @@
 
 프로젝트 스크립트를 **블럭 / 셀 / 스테이지 / 보드 / 컨트롤러** 5가지 역할로 나누고, 그 외는 **이벤트**로 정의했습니다.
 
+- **검토일:** 2025-02-10 | **전체 스크립트 수:** 32개 (모두 검토 완료)
+
 ---
 
 ## 1. 블럭 (Block)
@@ -126,5 +128,44 @@
 - **보드:** Block, Cell, BoardEnumerator, BoardShuffler, StageBuilder
 - **컨트롤러:** Stage, InputManager, BlockPos, Swipe/TouchEvaluator
 - **이벤트:** 위 역할들에서 참조되는 공통 타입·유틸·이펙트
+
+---
+
+## 전체 스크립트 목록 (역할 분담 요약)
+
+| # | 스크립트 | 경로 | 역할 분류 | 한 줄 요약 |
+|---|----------|------|-----------|------------|
+| 1 | Block.cs | Board/Blocks/ | 블럭 | 블록 데이터·상태·매칭·평가(DoEvaluation)·제거 |
+| 2 | BlockBehaviour.cs | Board/Blocks/ | 블럭 | 블록 GameObject 표시·스케일·제거 연출(폭발) |
+| 3 | BlockActionBehaviour.cs | Board/Blocks/ | 블럭 | 블록 드롭(낙하) 애니메이션 큐 처리 |
+| 4 | BlockDefine.cs | Board/Blocks/ | 블럭 | BlockType, BlockBreed, BlockStatus, BlockQuestType, BlockMethod |
+| 5 | BlockFactory.cs | Board/Blocks/ | 블럭 | Block 인스턴스 생성(BASIC/EMPTY, breed 랜덤) |
+| 6 | Cell.cs | Board/Cells/ | 셀 | 셀 데이터·타입·GameObject 연결·장애물 판정 |
+| 7 | CellBehaviour.cs | Board/Cells/ | 셀 | 셀 GameObject 표시·스케일·스프라이트 갱신 |
+| 8 | CellDefine.cs | Board/Cells/ | 셀 | CellType, CellTypeMethod(배치/이동 가능 여부) |
+| 9 | CellFactory.cs | Board/Cells/ | 셀 | Cell 인스턴스 생성(StageInfo 기반) |
+| 10 | Board.cs | Board/ | 보드 | 셀/블록 배열·매칭·제거·드롭·스폰·셔플 진입 |
+| 11 | BoardEnumerator.cs | Board/ | 보드 | 보드 순회·특수 셀(케이지 등) 판정 |
+| 12 | BoardShuffler.cs | Board/ | 보드 | 시작 시 3매치 없도록 블록 셔플 |
+| 13 | Stage.cs | Stage/ | 스테이지 | 한 판 진입·스와이프·평가·후처리(드롭/스폰 대기) |
+| 14 | StageBuilder.cs | Stage/ | 스테이지 | 스테이지 로드·Stage/Board 초기 구성 |
+| 15 | StageInfo.cs | Stage/ | 스테이지 | 스테이지 JSON 데이터 구조(row, col, cells) |
+| 16 | StageReader.cs | Stage/ | 스테이지 | Resources/Stage/stage_XXXX 로드 → StageInfo |
+| 17 | ActionManager.cs | Stage/ | 스테이지 | 스와이프→평가→후처리 연쇄 코루틴·되돌리기 |
+| 18 | StageController.cs | Stage/ | 컨트롤러 | 씬 진입·스테이지 빌드·입력→ActionManager 연동 |
+| 19 | InputManager.cs | Utils/InputEvent/ | 컨트롤러 | 터치/마우스→보드 좌표 변환·스와이프 방향 |
+| 20 | IInputHandlerBase.cs | Utils/InputEvent/ | 컨트롤러 | 입력 추상화(누름/뗌/좌표) |
+| 21 | MouseHandler.cs | Utils/InputEvent/ | 컨트롤러 | 마우스 입력 구현(에디터·PC) |
+| 22 | TouchHandler.cs | Utils/InputEvent/ | 컨트롤러 | 터치 입력 구현(모바일) |
+| 23 | TouchEvaluator.cs | Utils/InputEvent/ | 컨트롤러 | Swipe 열거형·방향·각도 계산 |
+| 24 | BlockPos.cs | Utils/ | 이벤트 | (row, col) 구조체 |
+| 25 | Returnable.cs | Utils/ | 이벤트 | 코루틴 결과 전달 래퍼 |
+| 26 | Action2D.cs | Utils/ | 이벤트 | MoveTo·Scale 애니메이션 코루틴 |
+| 27 | useful.cs | Utils/ | 이벤트 | SortedList First 확장 |
+| 28 | Constants.cs | Core/ | 이벤트 | BLOCK_ORG, SWIPE_DURATION, BLOCK_DESTROY_SCALE |
+| 29 | BlockConfig.cs | Scriptable/ | 이벤트 | 블록 스프라이트·색·폭발·드롭 속도(ScriptableObject) |
+| 30 | QuestDefine.cs | Quest/ | 이벤트 | MatchType, MatchTypeMethod(매치 조합) |
+| 31 | ParticleAutoDestroy.cs | Effect/ | 이벤트 | 파티클 종료 시 GameObject 자동 제거 |
+| 32 | CameraAgent.cs | Core/ | 이벤트 | 보드 단위에 맞춘 카메라 Orthographic Size |
 
 이 문서는 `Assets/2.Scripts/SCRIPTS_ROLE_MAP.md` 에 저장되어 있습니다.

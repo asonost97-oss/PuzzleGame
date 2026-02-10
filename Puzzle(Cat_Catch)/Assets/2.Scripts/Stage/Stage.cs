@@ -1,185 +1,234 @@
-// ============================================================================
-// Stage.cs - 한 스테이지(한 판)의 진입점: 보드 참조, 스와이프/평가/후처리
-// ============================================================================
-// 설명: Board를 소유하고, 스와이프 액션·보드 평가·매칭 후 드롭/스폰 후처리를 코루틴으로 제공합니다.
-// 이유: StageController는 입력만 받고, 실제 규칙·연출은 Stage에 모아 "한 판" 단위 테스트와 재사용이 쉽게 합니다.
-// ============================================================================
+// =============================================================================
+// Stage.cs — 스테이지 데이터 구조, 로드, 빌드, 한 판 로직 (통합)
+// =============================================================================
 
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using System;
 
+// -----------------------------------------------------------------------------
+// [1] 스테이지 데이터 구조 — JSON(row, col, cells) 역직렬화용, 필드명 공개
+// -----------------------------------------------------------------------------
+[Serializable]
+public class StageInfo
+{
+    public int row;
+    public int col;
+    public int[] cells;
+
+    public override string ToString() => JsonUtility.ToJson(this);
+
+    // 역할: (nRow, nCol)에 해당하는 셀 타입 반환. 파일 좌표계 ↔ 보드 좌표계 보정
+    public CellType GetCellType(int nRow, int nCol)
+    {
+        Debug.Assert(cells != null && cells.Length > nRow * col + nCol);
+        int revisedRow = (row - 1) - nRow;
+        if (cells.Length > revisedRow * col + nCol)
+            return (CellType)cells[revisedRow * col + nCol];
+        Debug.Assert(false);
+        return CellType.EMPTY;
+    }
+
+    public bool DoValidation()
+    {
+        Debug.Assert(cells != null && cells.Length == row * col);
+        return cells.Length == row * col;
+    }
+}
+
+// -----------------------------------------------------------------------------
+// [2] 스테이지 로드 — Resources/Stage/stage_XXXX 텍스트 → StageInfo
+// -----------------------------------------------------------------------------
+public static class StageReader
+{
+    // 역할: Resources/Stage/stage_0001 형식으로 로드 후 JsonUtility로 StageInfo 반환
+    public static StageInfo LoadStage(int nStage)
+    {
+        var textAsset = Resources.Load<TextAsset>($"Stage/stage_{nStage:D4}");
+        if (textAsset != null)
+        {
+            var info = JsonUtility.FromJson<StageInfo>(textAsset.text);
+            Debug.Assert(info.DoValidation());
+            return info;
+        }
+        return null;
+    }
+}
+
+// -----------------------------------------------------------------------------
+// [3] 스테이지 빌드 — 스테이지 번호 → StageInfo 로드 → Stage·Cell·Block 배열 채움
+// -----------------------------------------------------------------------------
+public class StageBuilder
+{
+    StageInfo m_StageInfo;
+    int m_nStage;
+
+    public StageBuilder(int nStage) => m_nStage = nStage;
+
+    // 역할: 데이터만 채워진 Stage 반환 (ComposeStage는 별도로 GameObject 생성)
+    public Stage ComposeStage()
+    {
+        Debug.Assert(m_nStage > 0);
+        m_StageInfo = StageReader.LoadStage(m_nStage);
+        if (m_StageInfo == null)
+            throw new Exception($"스테이지 {m_nStage} 데이터를 로드할 수 없습니다. Resources/Stage/stage_{m_nStage:D4} 확인하세요.");
+
+        var stage = new Stage(this, m_StageInfo.row, m_StageInfo.col);
+        for (int r = 0; r < m_StageInfo.row; r++)
+            for (int c = 0; c < m_StageInfo.col; c++)
+            {
+                stage.blocks[r, c] = SpawnBlockForStage(r, c);
+                stage.cells[r, c] = SpawnCellForStage(r, c);
+            }
+        return stage;
+    }
+
+    public StageInfo LoadStage(int nStage) => StageReader.LoadStage(nStage);
+
+    Block SpawnBlockForStage(int r, int c) =>
+        m_StageInfo.GetCellType(r, c) == CellType.EMPTY ? SpawnEmptyBlock() : SpawnBlock();
+
+    Cell SpawnCellForStage(int r, int c)
+    {
+        Debug.Assert(m_StageInfo != null && r < m_StageInfo.row && c < m_StageInfo.col);
+        return CellFactory.SpawnCell(m_StageInfo, r, c);
+    }
+
+    public static Stage BuildStage(int nStage) => new StageBuilder(nStage).ComposeStage();
+    public Block SpawnBlock() => BlockFactory.SpawnBlock(BlockType.BASIC);
+    public Block SpawnEmptyBlock() => BlockFactory.SpawnBlock(BlockType.EMPTY);
+}
+
+// -----------------------------------------------------------------------------
+// [4] 스테이지(한 판) — Board 소유, 스와이프/평가/후처리, 입력용 좌표·스와이프 판정
+// -----------------------------------------------------------------------------
 public class Stage
 {
-    public int maxRow { get { return m_Board.maxRow; } }
-    public int maxCol { get { return m_Board.maxCol; } }
+    public int maxRow => m_Board.maxRow;
+    public int maxCol => m_Board.maxCol;
+    public Board board => m_Board;
+    public Block[,] blocks => m_Board.blocks;
+    public Cell[,] cells => m_Board.cells;
 
     Board m_Board;
-    public Board board { get { return m_Board; } }
-
     StageBuilder m_StageBuilder;
 
-    public Block[,] blocks { get { return m_Board.blocks; } }
-    public Cell[,] cells { get { return m_Board.cells; } }
-
-    /// <summary>StageBuilder가 보드 크기와 구성을 알려주고, Board 인스턴스를 생성합니다.</summary>
     public Stage(StageBuilder stageBuilder, int nRow, int nCol)
     {
         m_StageBuilder = stageBuilder;
         m_Board = new Board(nRow, nCol);
     }
 
-    /// <summary>Cell/Block 프리팹과 컨테이너로 보드를 시각적으로 구성(셔플 후 GameObject 생성·배치)</summary>
-    internal void ComposeStage(GameObject cellPrefab, GameObject blockPrefab, Transform container)
-    {
+    internal void ComposeStage(GameObject cellPrefab, GameObject blockPrefab, Transform container) =>
         m_Board.ComposeStage(cellPrefab, blockPrefab, container, m_StageBuilder);
-    }
 
-    /// <summary>
-    /// (nRow, nCol) 블록을 swipeDir 방향으로 인접 블록과 교환합니다.
-    /// 성공 시 actionResult=true, 실패(스와이프 불가 칸 등)면 false. 교환 후 평가는 ActionManager에서 처리.
-    /// </summary>
+    // 역할: (row,col) 블록을 swipeDir 방향 인접 블록과 교환(애니 후 배열 갱신). 성공 시 actionResult=true
     public IEnumerator CoDoSwipeAction(int nRow, int nCol, Swipe swipeDir, Returnable<bool> actionResult)
     {
         actionResult.value = false;
+        int nSwipeRow = nRow + swipeDir.GetTargetRow(), nSwipeCol = nCol + swipeDir.GetTargetCol();
 
-        int nSwipeRow = nRow, nSwipeCol = nCol;
-        nSwipeRow += swipeDir.GetTargetRow();
-        nSwipeCol += swipeDir.GetTargetCol();
-
-        Debug.Assert(nRow != nSwipeRow || nCol != nSwipeCol, "Invalid Swipe : ({nSwipeRow}, {nSwipeCol})");
-        Debug.Assert(nSwipeRow >= 0 && nSwipeRow < maxRow && nSwipeCol >= 0 && nSwipeCol < maxCol, $"Swipe 타겟 블럭 인덱스 오류 = ({nSwipeRow}, {nSwipeCol}) ");
+        Debug.Assert(nRow != nSwipeRow || nCol != nSwipeCol);
+        Debug.Assert(nSwipeRow >= 0 && nSwipeRow < maxRow && nSwipeCol >= 0 && nSwipeCol < maxCol);
 
         if (m_Board.IsSwipeable(nSwipeRow, nSwipeCol))
         {
-            Block targetBlock = blocks[nSwipeRow, nSwipeCol];
-            Block baseBlock = blocks[nRow, nCol];
-            Debug.Assert(baseBlock != null && targetBlock != null);
+            var targetBlock = blocks[nSwipeRow, nSwipeCol];
+            var baseBlock = blocks[nRow, nCol];
+            if (baseBlock == null || targetBlock == null ||
+                baseBlock.blockObj == null || targetBlock.blockObj == null)
+                yield break;
 
-            Vector3 basePos = baseBlock.blockObj.transform.position;
-            Vector3 targetPos = targetBlock.blockObj.transform.position;
+            var basePos = baseBlock.blockObj.transform.position;
+            var targetPos = targetBlock.blockObj.transform.position;
 
             if (targetBlock.IsSwipeable(baseBlock))
             {
                 baseBlock.MoveTo(targetPos, Constants.SWIPE_DURATION);
                 targetBlock.MoveTo(basePos, Constants.SWIPE_DURATION);
-
                 yield return new WaitForSeconds(Constants.SWIPE_DURATION);
 
                 blocks[nRow, nCol] = targetBlock;
                 blocks[nSwipeRow, nSwipeCol] = baseBlock;
-
                 actionResult.value = true;
             }
         }
-
-        yield break;
     }
 
-    /// <summary>보드 전체 3매치 검사 후 매치된 블록 제거. matchResult에 매치 존재 여부 전달</summary>
-    public IEnumerator Evaluate(Returnable<bool> matchResult)
-    {
-        yield return m_Board.Evaluate(matchResult);
-    }
+    public IEnumerator Evaluate(Returnable<bool> matchResult) => m_Board.Evaluate(matchResult);
 
-    /// <summary>
-    /// 매칭 제거 후: 빈 칸으로 기존 블록 드롭 → 남은 빈 칸에 새 블록 스폰 → 드롭 애니메이션 종료까지 대기.
-    /// </summary>
+    // 역할: 매치 제거 후 드롭 → 빈 칸 스폰 → 드롭 끝날 때까지 대기
     public IEnumerator PostprocessAfterEvaluate()
     {
-        List<KeyValuePair<int, int>> unfilledBlocks = new List<KeyValuePair<int, int>>();
-        List<Block> movingBlocks = new List<Block>();
-
+        var unfilledBlocks = new List<KeyValuePair<int, int>>();
+        var movingBlocks = new List<Block>();
         yield return m_Board.ArrangeBlocksAfterClean(unfilledBlocks, movingBlocks);
         yield return m_Board.SpawnBlocksAfterClean(movingBlocks);
         yield return WaitForDropping(movingBlocks);
     }
 
-    /// <summary>드롭 중인 블록이 모두 isMoving=false가 될 때까지 짧은 간격으로 폴링하여 대기</summary>
     public IEnumerator WaitForDropping(List<Block> movingBlocks)
     {
-        WaitForSeconds waitForSecond = new WaitForSeconds(0.05f);
-
+        var wait = new WaitForSeconds(0.05f);
         while (true)
         {
-            bool bContinue = false;
+            bool anyMoving = false;
             for (int i = 0; i < movingBlocks.Count; i++)
-            {
-                if (movingBlocks[i].isMoving)
-                {
-                    bContinue = true;
-                    break;
-                }
-            }
-
-            if (!bContinue)
-                break;
-
-            yield return waitForSecond;
+                if (movingBlocks[i].isMoving) { anyMoving = true; break; }
+            if (!anyMoving) break;
+            yield return wait;
         }
-
         movingBlocks.Clear();
-        yield break;
     }
 
-    #region Simple Methods
+    #region Input / Swipe (StageController에서 사용)
 
-    /// <summary>월드 좌표 ptOrg가 보드 영역(0~maxCol, 0~maxRow) 안인지. 터치 유효 영역 판단에 사용</summary>
-    public bool IsInsideBoard(Vector2 ptOrg)
+    void LocalToGrid(Vector2 local, out int row, out int col)
     {
-        Vector2 point = new Vector2(ptOrg.x + (maxCol / 2.0f), ptOrg.y + (maxRow / 2.0f));
-
-        if (point.y < 0 || point.x < 0 || point.y > maxRow || point.x > maxCol)
-            return false;
-
-        return true;
+        col = (int)(local.x + maxCol * 0.5f);
+        row = (int)(local.y + maxRow * 0.5f);
     }
 
-    /// <summary>point(컨테이너 기준 월드 좌표)가 스와이프 가능한 블록 위인지 판정하고, 해당 칸 인덱스를 blockPos에 반환</summary>
-    public bool IsOnValideBlock(Vector2 point, out BlockPos blockPos)
+    public bool IsInsideBoard(Vector2 local)
     {
-        Vector2 pos = new Vector2(point.x + (maxCol/ 2.0f), point.y + (maxRow / 2.0f));
-        int nRow = (int)pos.y;
-        int nCol = (int)pos.x;
-
-        blockPos = new BlockPos(nRow, nCol);
-        return board.IsSwipeable(nRow, nCol);
+        LocalToGrid(local, out int row, out int col);
+        return row >= 0 && row < maxRow && col >= 0 && col < maxCol;
     }
 
-    /// <summary>해당 칸에서 swipeDir 방향으로 스와이프 시 보드 밖으로 나가지 않는지 검사</summary>
-    public bool IsValideSwipe(int nRow, int nCol, Swipe swipeDir)
+    public bool IsOnValideBlock(Vector2 local, out BlockPos blockPos)
     {
-        switch (swipeDir)
+        LocalToGrid(local, out int row, out int col);
+        blockPos = new BlockPos(row, col);
+        return board.IsSwipeable(row, col);
+    }
+
+    public bool IsValideSwipe(int row, int col, Swipe dir)
+    {
+        switch (dir)
         {
-            case Swipe.DOWN: return nRow > 0; ;
-            case Swipe.UP: return nRow < maxRow - 1;
-            case Swipe.LEFT: return nCol > 0;
-            case Swipe.RIGHT: return nCol < maxCol - 1;
-            default:
-                return false;
+            case Swipe.DOWN: return row > 0;
+            case Swipe.UP: return row < maxRow - 1;
+            case Swipe.LEFT: return col > 0;
+            case Swipe.RIGHT: return col < maxCol - 1;
+            default: return false;
         }
     }
     #endregion
 
     public void PrintAll()
     {
-        System.Text.StringBuilder strCells = new System.Text.StringBuilder();
-        System.Text.StringBuilder strBlocks = new System.Text.StringBuilder();
-
-        for (int nRow = maxRow -1; nRow >=0; nRow--)
+        var sbCells = new System.Text.StringBuilder();
+        var sbBlocks = new System.Text.StringBuilder();
+        for (int r = maxRow - 1; r >= 0; r--)
         {
-            for (int nCol = 0; nCol < maxCol; nCol++)
+            for (int c = 0; c < maxCol; c++)
             {
-                strCells.Append($"{cells[nRow, nCol].type}, ");
-                strBlocks.Append($"{blocks[nRow, nCol].breed}, ");
+                sbCells.Append($"{cells[r, c].type}, ");
+                sbBlocks.Append($"{blocks[r, c]?.breed}, ");
             }
-
-            strCells.Append("\n");
-            strBlocks.Append("\n");
+            sbCells.AppendLine(); sbBlocks.AppendLine();
         }
-
-        Debug.Log(strCells.ToString());
-        Debug.Log(strBlocks.ToString());
+        Debug.Log(sbCells.ToString()); Debug.Log(sbBlocks.ToString());
     }
 }
