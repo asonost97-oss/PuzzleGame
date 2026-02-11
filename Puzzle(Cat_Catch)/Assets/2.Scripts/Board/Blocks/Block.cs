@@ -196,11 +196,6 @@ public class BlockBehaviour : MonoBehaviour
     IEnumerator CoStartSimpleExplosion(bool bDestroy = true)
     {
         yield return Action2D.Scale(transform, Constants.BLOCK_DESTROY_SCALE, 4f);
-        var explosionObj = m_BlockConfig.GetExplosionObject(BlockQuestType.CLEAR_SIMPLE);
-        var main = explosionObj.GetComponent<ParticleSystem>().main;
-        main.startColor = m_BlockConfig.GetBlockColor(m_Block.breed);
-        explosionObj.SetActive(true);
-        explosionObj.transform.position = transform.position;
         yield return new WaitForSeconds(0.1f);
         if (bDestroy) Destroy(gameObject);
         else Debug.Assert(false);

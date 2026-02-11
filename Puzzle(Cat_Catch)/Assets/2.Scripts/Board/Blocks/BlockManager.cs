@@ -12,8 +12,12 @@ using UnityEngine;
 public class BlockManager : MonoBehaviour
 {
     [Header("블록 설정")]
-    [Tooltip("블록 스프라이트·색·폭발 이펙트·드롭 속도 (Resources/BlockConfig 등)")]
+    [Tooltip("블록 스프라이트·색·드롭 속도 (Resources/BlockConfig 등)")]
     [SerializeField] BlockConfig m_BlockConfig;
+
+    [Header("파티클")]
+    [Tooltip("블록 파괴 시 생성할 파티클 프리팹 (예: FX_BLOCK_EXPLOSION_NORMAL)")]
+    [SerializeField] GameObject particlePrefab;
 
     [Header("표시 (선택)")]
     [Tooltip("비워두면 같은 오브젝트에서 GetComponent로 찾습니다")]
@@ -57,12 +61,17 @@ public class BlockManager : MonoBehaviour
     IEnumerator CoStartSimpleExplosion(bool bDestroy = true)
     {
         yield return Action2D.Scale(transform, Constants.BLOCK_DESTROY_SCALE, 4f);
-        if (m_BlockConfig == null) { if (bDestroy) Destroy(gameObject); yield break; }
-        var explosionObj = m_BlockConfig.GetExplosionObject(BlockQuestType.CLEAR_SIMPLE);
-        var main = explosionObj.GetComponent<ParticleSystem>().main;
-        main.startColor = m_BlockConfig.GetBlockColor(m_Block.breed);
-        explosionObj.SetActive(true);
-        explosionObj.transform.position = transform.position;
+        if (particlePrefab != null)
+        {
+            var explosionObj = Instantiate(particlePrefab);
+            var ps = explosionObj.GetComponent<ParticleSystem>();
+            if (ps != null && m_BlockConfig != null)
+            {
+                var main = ps.main;
+            }
+            explosionObj.SetActive(true);
+            explosionObj.transform.position = transform.position;
+        }
         yield return new WaitForSeconds(0.1f);
         if (bDestroy) Destroy(gameObject);
     }
